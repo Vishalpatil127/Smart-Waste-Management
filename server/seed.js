@@ -53,14 +53,17 @@ async function seed() {
 
   // ── 1. Users ──────────────────────────────────────────────────────────────
   const usersPayload = [
-    { name: 'Admin User',       email: 'admin@smartwaste.com',   password: 'admin123', role: 'admin'    },
-    { name: 'Ravi Sharma',      email: 'ravi@smartwaste.com',    password: 'emp123',   role: 'employee' },
-    { name: 'Priya Deshmukh',   email: 'priya@smartwaste.com',   password: 'emp123',   role: 'employee' },
-    { name: 'Amit Kulkarni',    email: 'amit@smartwaste.com',    password: 'emp123',   role: 'employee' },
-    { name: 'Sunita Pawar',     email: 'sunita@smartwaste.com',  password: 'emp123',   role: 'employee' },
-    { name: 'Rohit Jadhav',     email: 'rohit@smartwaste.com',   password: 'emp123',   role: 'employee' },
-    { name: 'Meena Patil',      email: 'meena@smartwaste.com',   password: 'emp123',   role: 'employee' },
-    { name: 'Karan Bhosale',    email: 'karan@smartwaste.com',   password: 'emp123',   role: 'employee' },
+    // Admin — no zone
+    { name: 'Admin User',       email: 'admin@smartwaste.com',   password: 'admin123', role: 'admin',    zone: null },
+    // Kopargaon employees
+    { name: 'Ravi Sharma',      email: 'ravi@smartwaste.com',    password: 'emp123',   role: 'employee', zone: 'kopargaon' },
+    { name: 'Priya Deshmukh',   email: 'priya@smartwaste.com',   password: 'emp123',   role: 'employee', zone: 'kopargaon' },
+    { name: 'Amit Kulkarni',    email: 'amit@smartwaste.com',    password: 'emp123',   role: 'employee', zone: 'kopargaon' },
+    { name: 'Sunita Pawar',     email: 'sunita@smartwaste.com',  password: 'emp123',   role: 'employee', zone: 'kopargaon' },
+    // Shirdi employees
+    { name: 'Rohit Jadhav',     email: 'rohit@smartwaste.com',   password: 'emp123',   role: 'employee', zone: 'shirdi' },
+    { name: 'Meena Patil',      email: 'meena@smartwaste.com',   password: 'emp123',   role: 'employee', zone: 'shirdi' },
+    { name: 'Karan Bhosale',    email: 'karan@smartwaste.com',   password: 'emp123',   role: 'employee', zone: 'shirdi' },
   ];
 
   const users = [];
@@ -69,8 +72,10 @@ async function seed() {
     await doc.save(); // pre-save hook hashes the password
     users.push(doc);
   }
-  const employees = users.filter(u => u.role === 'employee');
-  console.log(`👤  Seeded ${users.length} users  (1 admin + ${employees.length} employees)`);
+  const employees    = users.filter(u => u.role === 'employee');
+  const kopEmployees = employees.filter(u => u.zone === 'kopargaon');
+  const shrEmployees = employees.filter(u => u.zone === 'shirdi');
+  console.log(`👤  Seeded ${users.length} users  (1 admin | ${kopEmployees.length} Kopargaon | ${shrEmployees.length} Shirdi employees)`);
 
   // ── 2. Bins ───────────────────────────────────────────────────────────────
   const binDocs = [];
@@ -95,42 +100,42 @@ async function seed() {
   console.log(`    Shirdi:    ${binDocs.filter(b => b.binId.startsWith('SHR')).length} bins`);
 
   // ── 3. Tasks ──────────────────────────────────────────────────────────────
+  // Zone-aware: KOP employees only get KOP bins, SHR employees only get SHR bins
+  const kopBins = binDocs.filter(b => b.binId.startsWith('KOP'));
+  const shrBins = binDocs.filter(b => b.binId.startsWith('SHR'));
+
   const tasks = [];
   let idx = 1;
 
-  // Completed (historical — last 7 days)
-  for (let i = 0; i < 10; i++) {
-    const bin = pick(binDocs);
-    const emp = pick(employees);
+  // Completed (historical — zone-matched)
+  for (let i = 0; i < 6; i++) {
     tasks.push({
-      taskId:             pad('TASK', idx++),
-      binId:              bin.binId,
-      assignedEmployeeId: emp._id,
-      status:             'Completed',
-      timestamp:          new Date(Date.now() - rand(1, 7) * 86_400_000),
+      taskId: pad('TASK', idx++), binId: pick(kopBins).binId,
+      assignedEmployeeId: pick(kopEmployees)._id, status: 'Completed',
+      timestamp: new Date(Date.now() - rand(1, 7) * 86_400_000),
+    });
+    tasks.push({
+      taskId: pad('TASK', idx++), binId: pick(shrBins).binId,
+      assignedEmployeeId: pick(shrEmployees)._id, status: 'Completed',
+      timestamp: new Date(Date.now() - rand(1, 7) * 86_400_000),
     });
   }
 
-  // In-Progress — assigned to first 2 critical bins
-  for (const bin of critical.slice(0, 2)) {
-    tasks.push({
-      taskId:             pad('TASK', idx++),
-      binId:              bin.binId,
-      assignedEmployeeId: pick(employees)._id,
-      status:             'In-Progress',
-      timestamp:          new Date(Date.now() - rand(0, 7_200_000)),
-    });
-  }
+  // In-Progress — 1 KOP critical + 1 SHR critical
+  const kopCritical = kopBins.filter(b => b.status === 'Critical');
+  const shrCritical = shrBins.filter(b => b.status === 'Critical');
 
-  // Pending — remaining critical + some warning bins (unassigned, ready to dispatch)
-  for (const bin of [...critical.slice(2), ...warning.slice(0, 3)]) {
-    tasks.push({
-      taskId:             pad('TASK', idx++),
-      binId:              bin.binId,
-      assignedEmployeeId: null,
-      status:             'Pending',
-      timestamp:          new Date(Date.now() - rand(0, 1_800_000)),
-    });
+  if (kopCritical[0]) tasks.push({ taskId: pad('TASK', idx++), binId: kopCritical[0].binId, assignedEmployeeId: pick(kopEmployees)._id, status: 'In-Progress', timestamp: new Date(Date.now() - rand(0, 7_200_000)) });
+  if (kopCritical[1]) tasks.push({ taskId: pad('TASK', idx++), binId: kopCritical[1].binId, assignedEmployeeId: pick(kopEmployees)._id, status: 'In-Progress', timestamp: new Date(Date.now() - rand(0, 7_200_000)) });
+  if (shrCritical[0]) tasks.push({ taskId: pad('TASK', idx++), binId: shrCritical[0].binId, assignedEmployeeId: pick(shrEmployees)._id, status: 'In-Progress', timestamp: new Date(Date.now() - rand(0, 7_200_000)) });
+
+  // Pending — remaining critical + some warning, unassigned
+  const pendingBins = [
+    ...kopCritical.slice(2), ...kopBins.filter(b => b.status === 'Warning').slice(0, 2),
+    ...shrCritical.slice(1), ...shrBins.filter(b => b.status === 'Warning').slice(0, 2),
+  ];
+  for (const bin of pendingBins) {
+    tasks.push({ taskId: pad('TASK', idx++), binId: bin.binId, assignedEmployeeId: null, status: 'Pending', timestamp: new Date(Date.now() - rand(0, 1_800_000)) });
   }
 
   await Task.insertMany(tasks);

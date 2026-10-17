@@ -1,16 +1,23 @@
 import api from './api';
 
-/**
- * Fetch all users.  An admin can optionally filter by role.
- * GET /api/users?role=employee
- */
-export const getAllUsers = async (role = '') => {
-  const params = role ? { role } : {};
+export const getAllUsers = async (role = '', zone = '') => {
+  const params = {};
+  if (role) params.role = role;
+  if (zone) params.zone = zone;
   const { data } = await api.get('/users', { params });
   return data;
 };
 
 export const getUserById = async (id) => {
   const { data } = await api.get(`/users/${id}`);
+  return data;
+};
+
+/**
+ * Returns employees for a zone with isBusy flag and activeTasks attached.
+ * zone: 'kopargaon' | 'shirdi'
+ */
+export const getEmployeeAvailability = async (zone) => {
+  const { data } = await api.get(`/users/availability/${zone}`);
   return data;
 };

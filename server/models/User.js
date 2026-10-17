@@ -26,6 +26,11 @@ const UserSchema = new mongoose.Schema(
       enum: ['admin', 'employee'],
       default: 'employee',
     },
+    zone: {
+      type: String,
+      enum: ['kopargaon', 'shirdi', null],
+      default: null,   // null = admin or unassigned
+    },
     isActive: {
       type: Boolean,
       default: true,
