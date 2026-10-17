@@ -2,19 +2,19 @@ import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 
-const titles = {
-  '/':               'Dashboard',
-  '/map':            'Map View',
-  '/command-center': 'Command Center',
-  '/alerts':         'Alerts',
-  '/employees':      'Employees',
-  '/tasks':          'Tasks',
-  '/analytics':      'Analytics',
+const TITLES = {
+  '/admin':                'Dashboard',
+  '/admin/map':            'Map View',
+  '/admin/command-center': 'Command Center',
+  '/admin/alerts':         'Alerts',
+  '/admin/employees':      'Employees',
+  '/admin/tasks':          'Tasks',
+  '/admin/analytics':      'Analytics',
 };
 
 export default function Layout() {
   const { pathname } = useLocation();
-  const title = titles[pathname] ?? 'Smart Waste';
+  const title = TITLES[pathname] ?? 'Smart Waste';
 
   return (
     <div className="flex min-h-screen">

@@ -7,10 +7,12 @@ export default function ProtectedRoute({ allowedRoles }) {
 
   if (loading) return <Spinner size="lg" />;
 
+  // Not logged in → login page
   if (!user) return <Navigate to="/login" replace />;
 
+  // Role not allowed → send to their own home
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={user.role === 'admin' ? '/admin' : '/emp'} replace />;
   }
 
   return <Outlet />;
