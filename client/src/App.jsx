@@ -8,6 +8,7 @@ import Alerts from './pages/Alerts';
 import Tasks from './pages/Tasks';
 import Analytics from './pages/Analytics';
 import CommandCenter from './pages/CommandCenter';
+import Employees from './pages/Employees';
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
           <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
             <Route path="/alerts"         element={<Alerts />} />
             <Route path="/command-center" element={<CommandCenter />} />
+            <Route path="/employees"      element={<Employees />} />
           </Route>
         </Route>
       </Route>

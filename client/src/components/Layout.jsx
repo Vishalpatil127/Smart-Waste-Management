@@ -7,6 +7,7 @@ const titles = {
   '/map':            'Map View',
   '/command-center': 'Command Center',
   '/alerts':         'Alerts',
+  '/employees':      'Employees',
   '/tasks':          'Tasks',
   '/analytics':      'Analytics',
 };
