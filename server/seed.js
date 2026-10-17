@@ -1,5 +1,5 @@
 /**
- * Seed script — populates the smart-waste DB with realistic fake data.
+ * Seed script — Kopargaon & Shirdi locations only.
  * Run:  node seed.js
  */
 require('dotenv').config();
@@ -8,106 +8,102 @@ const Bin  = require('./models/Bin');
 const Task = require('./models/Task');
 const User = require('./models/User');
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const pad  = (prefix, n) => `${prefix}-${String(n).padStart(3, '0')}`;
 
-// ── Pune city zones (realistic coordinates) ──────────────────────────────────
-const ZONES = [
-  { name: 'Koregaon Park',   lat: 18.5362, lng: 73.8943 },
-  { name: 'Shivajinagar',    lat: 18.5308, lng: 73.8474 },
-  { name: 'Kothrud',         lat: 18.5074, lng: 73.8077 },
-  { name: 'Hadapsar',        lat: 18.5018, lng: 73.9260 },
-  { name: 'Aundh',           lat: 18.5590, lng: 73.8076 },
-  { name: 'Wakad',           lat: 18.5986, lng: 73.7619 },
-  { name: 'Viman Nagar',     lat: 18.5679, lng: 73.9143 },
-  { name: 'Baner',           lat: 18.5590, lng: 73.7868 },
-  { name: 'Magarpatta',      lat: 18.5123, lng: 73.9308 },
-  { name: 'Deccan Gymkhana', lat: 18.5161, lng: 73.8469 },
+// ── Real street-level bin locations in Kopargaon & Shirdi ────────────────────
+const BIN_LOCATIONS = [
+  // ── KOPARGAON (19.885°N, 74.478°E) ─────────────────────────────────────
+  { binId: 'KOP-001', name: 'Kopargaon Bus Stand',          lat: 19.8871, lng: 74.4792, fill: 87 },
+  { binId: 'KOP-002', name: 'Kopargaon Market Yard',        lat: 19.8854, lng: 74.4763, fill: 63 },
+  { binId: 'KOP-003', name: 'Godavari River Bank',          lat: 19.8901, lng: 74.4810, fill: 34 },
+  { binId: 'KOP-004', name: 'Kopargaon Municipal Office',   lat: 19.8842, lng: 74.4748, fill: 92 },
+  { binId: 'KOP-005', name: 'Daityaguru Temple Road',       lat: 19.8864, lng: 74.4801, fill: 55 },
+  { binId: 'KOP-006', name: 'Kopargaon Railway Station',    lat: 19.8830, lng: 74.4720, fill: 78 },
+  { binId: 'KOP-007', name: 'Datta Par Site',               lat: 19.8912, lng: 74.4835, fill: 21 },
+  { binId: 'KOP-008', name: 'Kopargaon Main Road',          lat: 19.8858, lng: 74.4775, fill: 95 },
+  { binId: 'KOP-009', name: 'Kopargaon College Area',       lat: 19.8820, lng: 74.4755, fill: 47 },
+  { binId: 'KOP-010', name: 'Kopargaon Hospital Junction',  lat: 19.8878, lng: 74.4788, fill: 70 },
+
+  // ── SHIRDI (19.77°N, 74.48°E) ────────────────────────────────────────────
+  { binId: 'SHR-001', name: 'Sai Baba Samadhi Mandir Gate', lat: 19.7653, lng: 74.4762, fill: 98 },
+  { binId: 'SHR-002', name: 'Shirdi Bus Terminal',          lat: 19.7698, lng: 74.4801, fill: 82 },
+  { binId: 'SHR-003', name: 'Sainagar Shirdi Railway Stn',  lat: 19.7721, lng: 74.4823, fill: 61 },
+  { binId: 'SHR-004', name: 'Shirdi Pilgrim Reception Ctr', lat: 19.7645, lng: 74.4755, fill: 90 },
+  { binId: 'SHR-005', name: 'Dwarkamai Mosque Road',        lat: 19.7660, lng: 74.4778, fill: 44 },
+  { binId: 'SHR-006', name: 'Shirdi Main Market',           lat: 19.7675, lng: 74.4790, fill: 76 },
+  { binId: 'SHR-007', name: 'Hotel Zone – Pimpalwadi Rd',   lat: 19.7710, lng: 74.4815, fill: 58 },
+  { binId: 'SHR-008', name: 'Shri Sai Prasadalaya',         lat: 19.7649, lng: 74.4770, fill: 85 },
+  { binId: 'SHR-009', name: 'Gurusthan Shrine Area',        lat: 19.7657, lng: 74.4768, fill: 29 },
+  { binId: 'SHR-010', name: 'Wet N Joy Water Park Rd',      lat: 19.7738, lng: 74.4840, fill: 15 },
+  { binId: 'SHR-011', name: 'Shirdi Airport Approach Rd',   lat: 19.7760, lng: 74.4690, fill: 53 },
+  { binId: 'SHR-012', name: 'Chavadi Procession Route',     lat: 19.7663, lng: 74.4782, fill: 88 },
 ];
 
 async function seed() {
   await mongoose.connect(process.env.MONGO_URI);
   console.log('✅  MongoDB connected');
 
-  // ── Wipe existing data ─────────────────────────────────────────────────────
+  // Clear everything
   await Bin.deleteMany({});
   await Task.deleteMany({});
   await User.deleteMany({});
-  console.log('🗑️   Cleared existing collections');
+  console.log('🗑️   Cleared existing data');
 
-  // ── 1. Users (pre-save hook handles hashing) ──────────────────────────────
+  // ── 1. Users ──────────────────────────────────────────────────────────────
   const usersPayload = [
-    { name: 'Admin User',     email: 'admin@smartwaste.com',  password: 'admin123',  role: 'admin'    },
-    { name: 'Ravi Sharma',    email: 'ravi@smartwaste.com',   password: 'emp123',    role: 'employee' },
-    { name: 'Priya Deshmukh', email: 'priya@smartwaste.com',  password: 'emp123',    role: 'employee' },
-    { name: 'Amit Kulkarni',  email: 'amit@smartwaste.com',   password: 'emp123',    role: 'employee' },
-    { name: 'Sunita Pawar',   email: 'sunita@smartwaste.com', password: 'emp123',    role: 'employee' },
-    { name: 'Rohit Jadhav',   email: 'rohit@smartwaste.com',  password: 'emp123',    role: 'employee' },
-    { name: 'Meena Patil',    email: 'meena@smartwaste.com',  password: 'emp123',    role: 'employee' },
-    { name: 'Karan Bhosale',  email: 'karan@smartwaste.com',  password: 'emp123',    role: 'employee' },
+    { name: 'Admin User',       email: 'admin@smartwaste.com',   password: 'admin123', role: 'admin'    },
+    { name: 'Ravi Sharma',      email: 'ravi@smartwaste.com',    password: 'emp123',   role: 'employee' },
+    { name: 'Priya Deshmukh',   email: 'priya@smartwaste.com',   password: 'emp123',   role: 'employee' },
+    { name: 'Amit Kulkarni',    email: 'amit@smartwaste.com',    password: 'emp123',   role: 'employee' },
+    { name: 'Sunita Pawar',     email: 'sunita@smartwaste.com',  password: 'emp123',   role: 'employee' },
+    { name: 'Rohit Jadhav',     email: 'rohit@smartwaste.com',   password: 'emp123',   role: 'employee' },
+    { name: 'Meena Patil',      email: 'meena@smartwaste.com',   password: 'emp123',   role: 'employee' },
+    { name: 'Karan Bhosale',    email: 'karan@smartwaste.com',   password: 'emp123',   role: 'employee' },
   ];
 
   const users = [];
   for (const u of usersPayload) {
     const doc = new User(u);
-    await doc.save(); // triggers bcrypt pre-save hook
+    await doc.save(); // pre-save hook hashes the password
     users.push(doc);
   }
   const employees = users.filter(u => u.role === 'employee');
-  console.log(`👤  Seeded ${users.length} users (1 admin + ${employees.length} employees)`);
+  console.log(`👤  Seeded ${users.length} users  (1 admin + ${employees.length} employees)`);
 
-  // ── 2. Bins ────────────────────────────────────────────────────────────────
-  //  Spread bins across Pune zones; force a good mix of statuses
-  const fillDistribution = [
-    // Ensure at least some of each status
-    ...Array(8).fill(null).map(() => rand(81, 100)),  // Critical
-    ...Array(8).fill(null).map(() => rand(51, 80)),   // Warning
-    ...Array(8).fill(null).map(() => rand(0,  50)),   // Normal
-  ];
-
+  // ── 2. Bins ───────────────────────────────────────────────────────────────
   const binDocs = [];
-  let binIdx = 1;
-
-  for (const zone of ZONES) {
-    const count = rand(2, 4);
-    for (let i = 0; i < count; i++) {
-      const fill = fillDistribution.length
-        ? fillDistribution.splice(rand(0, fillDistribution.length - 1), 1)[0]
-        : rand(0, 100);
-
-      // Small lat/lng jitter so bins within a zone don't stack
-      const lat = parseFloat((zone.lat + (Math.random() - 0.5) * 0.012).toFixed(6));
-      const lng = parseFloat((zone.lng + (Math.random() - 0.5) * 0.012).toFixed(6));
-
-      const bin = new Bin({
-        binId:          pad('BIN', binIdx++),
-        location:       { lat, lng },
-        fillPercentage: fill,
-        // status derived automatically by pre-save hook
-        lastUpdated:    new Date(Date.now() - rand(0, 3_600_000)),
-      });
-      await bin.save();
-      binDocs.push(bin);
-    }
+  for (const loc of BIN_LOCATIONS) {
+    const bin = new Bin({
+      binId:          loc.binId,
+      location:       { lat: loc.lat, lng: loc.lng },
+      fillPercentage: loc.fill,
+      // status auto-derived by Bin pre-save hook:
+      //   0-50 → Normal | 51-80 → Warning | 81-100 → Critical
+      lastUpdated: new Date(Date.now() - rand(0, 3_600_000)),
+    });
+    await bin.save();
+    binDocs.push(bin);
   }
 
   const critical = binDocs.filter(b => b.status === 'Critical');
   const warning  = binDocs.filter(b => b.status === 'Warning');
   const normal   = binDocs.filter(b => b.status === 'Normal');
-  console.log(`🗑️   Seeded ${binDocs.length} bins — ${critical.length} Critical · ${warning.length} Warning · ${normal.length} Normal`);
+  console.log(`📍  Seeded ${binDocs.length} bins — ${critical.length} Critical · ${warning.length} Warning · ${normal.length} Normal`);
+  console.log(`    Kopargaon: ${binDocs.filter(b => b.binId.startsWith('KOP')).length} bins`);
+  console.log(`    Shirdi:    ${binDocs.filter(b => b.binId.startsWith('SHR')).length} bins`);
 
-  // ── 3. Tasks ───────────────────────────────────────────────────────────────
+  // ── 3. Tasks ──────────────────────────────────────────────────────────────
   const tasks = [];
-  let taskIdx = 1;
+  let idx = 1;
 
-  // --- Completed tasks (historical, spread over last 7 days) ---
-  for (let i = 0; i < 14; i++) {
+  // Completed (historical — last 7 days)
+  for (let i = 0; i < 10; i++) {
     const bin = pick(binDocs);
     const emp = pick(employees);
     tasks.push({
-      taskId:             pad('TASK', taskIdx++),
+      taskId:             pad('TASK', idx++),
       binId:              bin.binId,
       assignedEmployeeId: emp._id,
       status:             'Completed',
@@ -115,27 +111,21 @@ async function seed() {
     });
   }
 
-  // --- In-Progress tasks — assigned to a few critical bins ---
-  const inProgressBins = critical.slice(0, Math.min(3, critical.length));
-  for (const bin of inProgressBins) {
-    const emp = pick(employees);
+  // In-Progress — assigned to first 2 critical bins
+  for (const bin of critical.slice(0, 2)) {
     tasks.push({
-      taskId:             pad('TASK', taskIdx++),
+      taskId:             pad('TASK', idx++),
       binId:              bin.binId,
-      assignedEmployeeId: emp._id,
+      assignedEmployeeId: pick(employees)._id,
       status:             'In-Progress',
       timestamp:          new Date(Date.now() - rand(0, 7_200_000)),
     });
   }
 
-  // --- Pending tasks — unassigned, waiting for dispatch ---
-  const pendingBins = [
-    ...critical.slice(inProgressBins.length),            // remaining critical
-    ...warning.slice(0, Math.min(4, warning.length)),    // some warning bins too
-  ];
-  for (const bin of pendingBins) {
+  // Pending — remaining critical + some warning bins (unassigned, ready to dispatch)
+  for (const bin of [...critical.slice(2), ...warning.slice(0, 3)]) {
     tasks.push({
-      taskId:             pad('TASK', taskIdx++),
+      taskId:             pad('TASK', idx++),
       binId:              bin.binId,
       assignedEmployeeId: null,
       status:             'Pending',
@@ -144,17 +134,15 @@ async function seed() {
   }
 
   await Task.insertMany(tasks);
-  const doneCount       = tasks.filter(t => t.status === 'Completed').length;
-  const inProgCount     = tasks.filter(t => t.status === 'In-Progress').length;
-  const pendCount       = tasks.filter(t => t.status === 'Pending').length;
-  console.log(`📋  Seeded ${tasks.length} tasks — ${doneCount} Completed · ${inProgCount} In-Progress · ${pendCount} Pending`);
+  console.log(`📋  Seeded ${tasks.length} tasks — ${tasks.filter(t=>t.status==='Completed').length} Completed · ${tasks.filter(t=>t.status==='In-Progress').length} In-Progress · ${tasks.filter(t=>t.status==='Pending').length} Pending`);
 
-  // ── Done ───────────────────────────────────────────────────────────────────
-  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('🎉  Seed complete! Login at http://localhost:5173/login');
+  // ── Summary ───────────────────────────────────────────────────────────────
+  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🎉  Seed complete! Locations: Kopargaon & Shirdi, Maharashtra');
   console.log('    Admin    →  admin@smartwaste.com  /  admin123');
   console.log('    Employee →  ravi@smartwaste.com   /  emp123');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  console.log('    Open     →  http://localhost:5173/login');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
   await mongoose.disconnect();
   process.exit(0);
