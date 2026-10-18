@@ -1,10 +1,14 @@
 require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const connectDB = require('./config/db');
+const express    = require('express');
+const cors       = require('cors');
+const connectDB  = require('./config/db');
+const { initFirebase } = require('./config/firebase');
 
 // ── Connect to MongoDB ────────────────────────
 connectDB();
+
+// ── Initialize Firebase Admin (optional, non-blocking) ────
+initFirebase();
 
 const app = express();
 

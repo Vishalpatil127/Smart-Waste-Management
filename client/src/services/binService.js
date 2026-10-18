@@ -1,4 +1,5 @@
 import api from './api';
+import { syncBinToFirestore } from './firebase';
 
 export const getAllBins = async (status = '') => {
   const params = status ? { status } : {};
@@ -16,7 +17,18 @@ export const getBinById = async (binId) => {
   return data;
 };
 
+/**
+ * Update bin fill level.
+ * 1. Sends to Express API → MongoDB (source of truth).
+ * 2. Syncs the updated bin to Firestore for real-time frontend listeners.
+ */
 export const updateBin = async (payload) => {
   const { data } = await api.post('/bins/update', payload);
+
+  // Mirror to Firestore so all connected clients update instantly
+  if (data?.data) {
+    await syncBinToFirestore(data.data);
+  }
+
   return data;
 };

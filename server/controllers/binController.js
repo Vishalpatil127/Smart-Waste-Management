@@ -1,6 +1,7 @@
-const Bin = require('../models/Bin');
+const Bin  = require('../models/Bin');
 const Task = require('../models/Task');
 const { v4: uuidv4 } = require('uuid');
+const { syncBinToFirestore, syncSensorToRTDB } = require('../config/firebase');
 
 // ─────────────────────────────────────────────
 // POST /api/bins/update
@@ -46,6 +47,10 @@ const updateBin = async (req, res) => {
 
     const previousStatus = bin.status;
     await bin.save(); // pre-save hook re-derives status
+
+    // ── Sync to Firebase (fire-and-forget, non-blocking) ──
+    syncBinToFirestore(bin);   // Firestore → frontend onSnapshot listeners
+    syncSensorToRTDB(bin);     // RTDB → ultra-low-latency sensor dashboard
 
     // Auto-create a task when bin transitions into Critical
     if (bin.status === 'Critical' && previousStatus !== 'Critical') {

@@ -1,11 +1,24 @@
 import { useEffect, useState } from 'react';
-import { getAllBins } from '../services/binService';
-import { getAllTasks } from '../services/taskService';
-import FillBar from '../components/FillBar';
-import StatusBadge from '../components/StatusBadge';
-import Spinner from '../components/Spinner';
-import BinDrawer from '../components/BinDrawer';
+import { useLiveBins }          from '../hooks/useLiveBins';
+import { getAllTasks }           from '../services/taskService';
+import FillBar       from '../components/FillBar';
+import StatusBadge   from '../components/StatusBadge';
+import Spinner       from '../components/Spinner';
+import BinDrawer     from '../components/BinDrawer';
 import AssignTaskModal from '../components/AssignTaskModal';
+
+// ── Live indicator dot ────────────────────────────────────────────────────────
+function LiveDot() {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-green-600">
+      <span className="relative flex h-2 w-2">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+      </span>
+      Live
+    </span>
+  );
+}
 
 // ── Clickable stat card ───────────────────────────────────────────────────────
 function ClickableStatCard({ title, value, icon, bg, border, textColor, iconBg, pulse, onClick }) {
@@ -26,7 +39,6 @@ function ClickableStatCard({ title, value, icon, bg, border, textColor, iconBg, 
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{title}</p>
         <p className={`text-3xl font-bold ${textColor}`}>{value}</p>
       </div>
-      {/* Chevron hint */}
       <span className="text-gray-300 group-hover:text-gray-500 transition-colors text-lg shrink-0">›</span>
     </button>
   );
@@ -34,43 +46,37 @@ function ClickableStatCard({ title, value, icon, bg, border, textColor, iconBg, 
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const [bins, setBins]         = useState([]);
-  const [tasks, setTasks]       = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState('');
+  // ── Live bins from Firebase (Firestore + RTDB) + MongoDB fallback ──────────
+  const { bins, loading: binsLoading, error: binsError } = useLiveBins();
 
-  // Drawer state: null | 'all' | 'Critical' | 'Warning' | 'Normal' | 'pending-tasks'
-  const [drawer, setDrawer]     = useState(null);
-  // Assign modal state
-  const [assignBin, setAssignBin] = useState(null);
+  const [tasks,      setTasks]      = useState([]);
+  const [tasksLoading, setTasksLoading] = useState(true);
+  const [drawer,     setDrawer]     = useState(null);
+  const [assignBin,  setAssignBin]  = useState(null);
   const [successMsg, setSuccessMsg] = useState('');
 
-  const load = () => {
-    setLoading(true);
-    Promise.all([getAllBins(), getAllTasks()])
-      .then(([b, t]) => { setBins(b.data); setTasks(t.data); })
-      .catch(() => setError('Failed to load data.'))
-      .finally(() => setLoading(false));
-  };
+  // Tasks still use REST (no real-time needed for the dashboard summary)
+  useEffect(() => {
+    getAllTasks()
+      .then(res => setTasks(res.data))
+      .finally(() => setTasksLoading(false));
+  }, []);
 
-  useEffect(() => { load(); }, []);
-
-  // Auto-dismiss success
   useEffect(() => {
     if (!successMsg) return;
     const t = setTimeout(() => setSuccessMsg(''), 4000);
     return () => clearTimeout(t);
   }, [successMsg]);
 
+  const loading = binsLoading || tasksLoading;
   if (loading) return <Spinner />;
-  if (error)   return <p className="text-red-500">{error}</p>;
+  if (binsError) return <p className="text-red-500">Failed to load bins: {binsError}</p>;
 
   const critical = bins.filter(b => b.status === 'Critical');
   const warning  = bins.filter(b => b.status === 'Warning');
   const normal   = bins.filter(b => b.status === 'Normal');
   const pending  = tasks.filter(t => t.status === 'Pending');
 
-  // Which bins to show in the drawer
   const drawerBins =
     drawer === 'all'      ? bins :
     drawer === 'Critical' ? critical :
@@ -84,7 +90,7 @@ export default function Dashboard() {
     drawer === 'Normal'   ? `🟢 Normal Bins (${normal.length})` : '';
 
   const statCards = [
-    { key: 'all',      title: 'Total Bins',    value: bins.length,    icon: '🗑️', bg: 'bg-blue-50',   border: 'border-blue-200',   textColor: 'text-blue-700',   iconBg: 'bg-blue-100'   },
+    { key: 'all',      title: 'Total Bins',    value: bins.length,     icon: '🗑️', bg: 'bg-blue-50',   border: 'border-blue-200',   textColor: 'text-blue-700',   iconBg: 'bg-blue-100'   },
     { key: 'Critical', title: 'Critical Bins', value: critical.length, icon: '🔴', bg: 'bg-red-50',    border: 'border-red-200',    textColor: 'text-red-600',    iconBg: 'bg-red-100',   pulse: critical.length > 0 },
     { key: 'Warning',  title: 'Warning Bins',  value: warning.length,  icon: '🟡', bg: 'bg-amber-50',  border: 'border-amber-200',  textColor: 'text-amber-600',  iconBg: 'bg-amber-100'  },
     { key: 'Normal',   title: 'Normal Bins',   value: normal.length,   icon: '🟢', bg: 'bg-green-50',  border: 'border-green-200',  textColor: 'text-green-600',  iconBg: 'bg-green-100'  },
@@ -93,28 +99,33 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
 
+      {/* Live indicator */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-gray-400">Bin data updates automatically</p>
+        <LiveDot />
+      </div>
+
       {successMsg && (
         <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-2">
           ✅ {successMsg}
         </div>
       )}
 
-      {/* ── Clickable stat cards ────────────────────────── */}
+      {/* Clickable stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {statCards.map(card => (
-          <ClickableStatCard
-            key={card.key}
-            {...card}
-            onClick={() => setDrawer(card.key)}
-          />
+          <ClickableStatCard key={card.key} {...card} onClick={() => setDrawer(card.key)} />
         ))}
       </div>
 
-      {/* ── Bins table ──────────────────────────────────── */}
+      {/* Bins table */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-gray-700">All Bins</h2>
-          <span className="text-xs text-gray-400">Click any stat card to filter</span>
+          <div className="flex items-center gap-3">
+            <LiveDot />
+            <span className="text-xs text-gray-400">Click any card to filter</span>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -129,19 +140,17 @@ export default function Dashboard() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {bins.map(bin => (
-                <tr key={bin._id} className="hover:bg-gray-50 transition-colors">
+                <tr key={bin._id ?? bin.binId} className="hover:bg-gray-50 transition-colors">
                   <td className="py-3 pr-4 font-mono font-semibold text-gray-800">{bin.binId}</td>
                   <td className="py-3 pr-4 text-gray-400 text-xs">
-                    {bin.location.lat.toFixed(5)}, {bin.location.lng.toFixed(5)}
+                    {bin.location?.lat?.toFixed(5)}, {bin.location?.lng?.toFixed(5)}
                   </td>
                   <td className="py-3 pr-4 w-44">
                     <FillBar percentage={bin.fillPercentage} />
                   </td>
-                  <td className="py-3 pr-4">
-                    <StatusBadge status={bin.status} />
-                  </td>
+                  <td className="py-3 pr-4"><StatusBadge status={bin.status} /></td>
                   <td className="py-3 text-xs text-gray-400">
-                    {new Date(bin.lastUpdated).toLocaleString()}
+                    {bin.lastUpdated ? new Date(bin.lastUpdated).toLocaleString() : '—'}
                   </td>
                 </tr>
               ))}
@@ -150,13 +159,11 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Recent tasks ────────────────────────────────── */}
+      {/* Recent tasks */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-gray-700">Recent Tasks</h2>
-          {pending.length > 0 && (
-            <span className="badge-pending">{pending.length} pending</span>
-          )}
+          {pending.length > 0 && <span className="badge-pending">{pending.length} pending</span>}
         </div>
         {tasks.length === 0 ? (
           <p className="text-sm text-gray-400">No tasks yet.</p>
@@ -178,7 +185,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* ── Bin drawer ──────────────────────────────────── */}
+      {/* Bin drawer */}
       <BinDrawer
         isOpen={!!drawer}
         onClose={() => setDrawer(null)}
@@ -187,11 +194,11 @@ export default function Dashboard() {
         onAssign={(bin) => setAssignBin(bin)}
       />
 
-      {/* ── Assign task modal ───────────────────────────── */}
+      {/* Assign task modal */}
       <AssignTaskModal
         bin={assignBin}
         onClose={() => setAssignBin(null)}
-        onSuccess={(msg) => { setSuccessMsg(msg); load(); }}
+        onSuccess={(msg) => { setSuccessMsg(msg); }}
       />
     </div>
   );

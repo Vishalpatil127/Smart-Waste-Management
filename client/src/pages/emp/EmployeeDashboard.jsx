@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getAllTasks, updateTaskStatus } from '../../services/taskService';
-import { getAllBins } from '../../services/binService';
+import { useLiveBins } from '../../hooks/useLiveBins';
 import FillBar from '../../components/FillBar';
 import StatusBadge from '../../components/StatusBadge';
 import Spinner from '../../components/Spinner';
@@ -28,23 +28,27 @@ export default function EmployeeDashboard() {
   const { user }  = useAuth();
   const zone      = ZONE_META[user?.zone];
 
+  // Live bins from Firebase instead of polling
+  const { bins: allBins, loading: binsLoading } = useLiveBins();
+
   const [myTasks,  setMyTasks]  = useState([]);
-  const [zoneBins, setZoneBins] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');
   const [success,  setSuccess]  = useState('');
   const [completing, setCompleting] = useState('');
 
+  // Filter to this employee's zone
+  const zoneBins = allBins.filter(b => zone && b.binId?.startsWith(zone.prefix));
+
   const load = async () => {
     setLoading(true);
     try {
-      const [taskRes, binRes] = await Promise.all([getAllTasks(), getAllBins()]);
+      const taskRes = await getAllTasks();
       const mine = taskRes.data.filter(
         t => String(t.assignedEmployeeId?._id ?? t.assignedEmployeeId) === String(user?._id)
       );
       setMyTasks(mine);
-      if (zone) setZoneBins(binRes.data.filter(b => b.binId.startsWith(zone.prefix)));
-    } catch { setError('Failed to load data.'); }
+    } catch { setError('Failed to load tasks.'); }
     finally  { setLoading(false); }
   };
 
@@ -66,7 +70,7 @@ export default function EmployeeDashboard() {
     finally { setCompleting(''); }
   };
 
-  if (loading) return <Spinner />;
+  if (loading || binsLoading) return <Spinner />;
 
   const active    = myTasks.filter(t => t.status !== 'Completed');
   const completed = myTasks.filter(t => t.status === 'Completed');

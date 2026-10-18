@@ -1,128 +1,109 @@
 import { useEffect, useState, useCallback } from 'react';
-import { getAllBins, getCriticalBins } from '../services/binService';
-import SummaryCards from '../components/SummaryCards';
-import CriticalAlertsTable from '../components/CriticalAlertsTable';
-import AssignTaskModal from '../components/AssignTaskModal';
+import { useLiveBins }        from '../hooks/useLiveBins';
+import { getCriticalBins }    from '../services/binService';
+import SummaryCards           from '../components/SummaryCards';
+import CriticalAlertsTable    from '../components/CriticalAlertsTable';
+import AssignTaskModal        from '../components/AssignTaskModal';
 
-const AUTO_REFRESH_MS = 30_000; // re-poll every 30 seconds
+// Live indicator
+function LiveDot() {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-green-600">
+      <span className="relative flex h-2 w-2">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+      </span>
+      Firebase Live
+    </span>
+  );
+}
 
 export default function CommandCenter() {
-  // ── State ────────────────────────────────────────────────
-  const [allBins, setAllBins]           = useState([]);
+  // ── Live all-bins from Firebase ───────────────────────────────────────────
+  const { bins: allBins, loading: loadingAll } = useLiveBins();
+
   const [criticalBins, setCriticalBins] = useState([]);
-  const [loadingAll, setLoadingAll]     = useState(true);
-  const [loadingCrit, setLoadingCrit]   = useState(true);
-  const [error, setError]               = useState('');
-  const [lastRefresh, setLastRefresh]   = useState(null);
+  const [loadingCrit,  setLoadingCrit]  = useState(true);
+  const [error,        setError]        = useState('');
+  const [lastRefresh,  setLastRefresh]  = useState(null);
+  const [selectedBin,  setSelectedBin]  = useState(null);
+  const [successMsg,   setSuccessMsg]   = useState('');
 
-  // Modal state
-  const [selectedBin, setSelectedBin]   = useState(null); // bin to assign
-  const [successMsg, setSuccessMsg]     = useState('');
-
-  // ── Data fetching ────────────────────────────────────────
-  const fetchAll = useCallback(async () => {
-    setError('');
-    try {
-      const res = await getAllBins();
-      setAllBins(res.data);
-    } catch {
-      setError('Failed to load bin overview.');
-    } finally {
-      setLoadingAll(false);
-    }
-  }, []);
-
+  // Critical bins still come from REST (includes openTasks population)
   const fetchCritical = useCallback(async () => {
+    setLoadingCrit(true);
     try {
       const res = await getCriticalBins();
       setCriticalBins(res.data);
+      setLastRefresh(new Date());
     } catch {
-      // non-blocking; summary cards already show the count
+      setError('Failed to load critical bins.');
     } finally {
       setLoadingCrit(false);
     }
   }, []);
 
-  const refresh = useCallback(() => {
-    setLoadingAll(true);
-    setLoadingCrit(true);
-    Promise.all([fetchAll(), fetchCritical()]).then(() =>
-      setLastRefresh(new Date())
-    );
-  }, [fetchAll, fetchCritical]);
-
-  // Initial load + auto-refresh
+  // Initial + auto-refresh critical every 30s
   useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, AUTO_REFRESH_MS);
+    fetchCritical();
+    const id = setInterval(fetchCritical, 30_000);
     return () => clearInterval(id);
-  }, [refresh]);
+  }, [fetchCritical]);
 
-  // Auto-dismiss success banner
   useEffect(() => {
     if (!successMsg) return;
     const t = setTimeout(() => setSuccessMsg(''), 4000);
     return () => clearTimeout(t);
   }, [successMsg]);
 
-  // ── Handlers ─────────────────────────────────────────────
-  const handleAssignClick = (bin) => {
-    setSuccessMsg('');
-    setSelectedBin(bin);
-  };
-
   const handleDispatchSuccess = (msg) => {
     setSuccessMsg(msg);
-    // Refresh data so the table updates immediately
     fetchCritical();
-    fetchAll();
   };
 
-  // ── Render ───────────────────────────────────────────────
   return (
     <div className="space-y-6">
 
-      {/* ── Header bar ───────────────────────────────────── */}
+      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-gray-800">Command Center</h2>
-          <p className="text-sm text-gray-400 mt-0.5">
-            Live overview · auto-refreshes every 30 s
+          <p className="text-sm text-gray-400 mt-0.5 flex items-center gap-3">
+            Bin overview updates in real-time
+            <LiveDot />
             {lastRefresh && (
-              <span className="ml-2 text-gray-300">
-                · Last: {lastRefresh.toLocaleTimeString()}
+              <span className="text-gray-300">
+                · Alerts refreshed {lastRefresh.toLocaleTimeString()}
               </span>
             )}
           </p>
         </div>
         <button
-          onClick={refresh}
-          disabled={loadingAll || loadingCrit}
+          onClick={fetchCritical}
+          disabled={loadingCrit}
           className="btn-secondary text-sm flex items-center gap-2"
         >
-          <span className={loadingAll || loadingCrit ? 'animate-spin' : ''}>🔄</span>
-          Refresh
+          <span className={loadingCrit ? 'animate-spin' : ''}>🔄</span>
+          Refresh Alerts
         </button>
       </div>
 
-      {/* ── Global error ─────────────────────────────────── */}
+      {/* Errors / Success */}
       {error && (
         <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center gap-2">
-          <span>⚠️</span> {error}
+          ⚠️ {error}
         </div>
       )}
-
-      {/* ── Success banner ───────────────────────────────── */}
       {successMsg && (
         <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-2">
-          <span>✅</span> {successMsg}
+          ✅ {successMsg}
         </div>
       )}
 
-      {/* ── Summary cards ────────────────────────────────── */}
+      {/* Summary cards — live bins from Firebase */}
       <SummaryCards bins={allBins} loading={loadingAll} />
 
-      {/* ── Critical alerts section ──────────────────────── */}
+      {/* Critical alerts table */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-base font-semibold text-gray-700 flex items-center gap-2">
@@ -131,19 +112,16 @@ export default function CommandCenter() {
               <span className="badge-critical">{criticalBins.length}</span>
             )}
           </h3>
-          <p className="text-xs text-gray-400">
-            Bins with fill ≥ 80% requiring immediate collection
-          </p>
+          <p className="text-xs text-gray-400">Bins with fill ≥ 80% requiring immediate collection</p>
         </div>
-
         <CriticalAlertsTable
           bins={criticalBins}
-          onAssign={handleAssignClick}
+          onAssign={(bin) => { setSuccessMsg(''); setSelectedBin(bin); }}
           loading={loadingCrit}
         />
       </div>
 
-      {/* ── Assign Task Modal ────────────────────────────── */}
+      {/* Assign Task Modal */}
       <AssignTaskModal
         bin={selectedBin}
         onClose={() => setSelectedBin(null)}
