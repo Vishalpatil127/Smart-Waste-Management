@@ -74,7 +74,16 @@ export default function AssignTaskModal({ bin, onClose, onSuccess }) {
     setError('');
     setSubmitting(true);
     try {
-      const taskRes = await createTask({ binId: bin.binId });
+      // Pass sensor data so server can auto-register RTDB-only bins (e.g. BIN001)
+      const taskPayload = {
+        binId:          bin.binId,
+        fillPercentage: bin.fillPercentage,
+        ...(bin.location?.lat != null && {
+          lat: bin.location.lat,
+          lng: bin.location.lng,
+        }),
+      };
+      const taskRes = await createTask(taskPayload);
       await assignTask(taskRes.data.taskId, selectedEmp);
       const emp = employees.find((e) => e._id === selectedEmp);
       onSuccess?.(`Task dispatched to ${emp?.name ?? 'employee'}.`);

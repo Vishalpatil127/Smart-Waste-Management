@@ -32,18 +32,31 @@ const getAllTasks = async (req, res) => {
 // ─────────────────────────────────────────────
 // POST /api/tasks
 // Create a task manually (admin)
+// Auto-registers bin in MongoDB if it only exists in RTDB (ESP32-only bins)
 // ─────────────────────────────────────────────
 const createTask = async (req, res) => {
   try {
-    const { binId, assignedEmployeeId } = req.body;
+    const { binId, assignedEmployeeId, fillPercentage, lat, lng } = req.body;
 
     if (!binId) {
       return res.status(400).json({ success: false, message: 'binId is required' });
     }
 
-    const bin = await Bin.findOne({ binId });
+    // Try to find the bin in MongoDB; if missing, auto-register it
+    // (handles ESP32/RTDB-only bins like BIN001 that were never POSTed to /api/bins/update)
+    let bin = await Bin.findOne({ binId });
+
     if (!bin) {
-      return res.status(404).json({ success: false, message: 'Bin not found' });
+      // Need at least a fill percentage to register; use provided value or default 0
+      const fill = fillPercentage != null ? Number(fillPercentage) : 0;
+
+      // lat/lng are optional — RTDB-only bins may not have a known location yet
+      const location = (lat != null && lng != null)
+        ? { lat: Number(lat), lng: Number(lng) }
+        : { lat: 0, lng: 0 };   // placeholder until ESP32 reports coordinates
+
+      bin = new Bin({ binId, location, fillPercentage: fill });
+      await bin.save();  // pre-save hook derives status
     }
 
     if (assignedEmployeeId) {
