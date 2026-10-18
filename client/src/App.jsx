@@ -13,6 +13,8 @@ import Tasks        from './pages/Tasks';
 import Analytics    from './pages/Analytics';
 import CommandCenter from './pages/CommandCenter';
 import Employees    from './pages/Employees';
+import Maintenance  from './pages/Maintenance';
+import Bins         from './pages/Bins';
 
 // ── Employee shell ───────────────────────────────────────
 import EmployeeLayout    from './components/EmployeeLayout';
@@ -43,6 +45,8 @@ export default function App() {
           <Route path="/admin/alerts"         element={<Alerts />} />
           <Route path="/admin/command-center" element={<CommandCenter />} />
           <Route path="/admin/employees"      element={<Employees />} />
+          <Route path="/admin/maintenance"    element={<Maintenance />} />
+          <Route path="/admin/bins"           element={<Bins />} />
         </Route>
       </Route>
 

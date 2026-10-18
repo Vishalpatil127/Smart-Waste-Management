@@ -2,13 +2,15 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
-  { to: '/admin',                label: 'Dashboard',     icon: '📊', end: true },
-  { to: '/admin/map',            label: 'Map View',       icon: '🗺️' },
-  { to: '/admin/command-center', label: 'Command Center', icon: '🎛️' },
-  { to: '/admin/alerts',         label: 'Alerts',         icon: '🔔' },
-  { to: '/admin/employees',      label: 'Employees',      icon: '👥' },
-  { to: '/admin/tasks',          label: 'Tasks',          icon: '✅' },
-  { to: '/admin/analytics',      label: 'Analytics',      icon: '📈' },
+  { to: '/admin',                label: 'Dashboard',      icon: '📊', end: true },
+  { to: '/admin/map',            label: 'Map View',        icon: '🗺️' },
+  { to: '/admin/bins',           label: 'Bins',            icon: '🗑️' },
+  { to: '/admin/command-center', label: 'Command Center',  icon: '🎛️' },
+  { to: '/admin/alerts',         label: 'Alerts',          icon: '🔔' },
+  { to: '/admin/employees',      label: 'Employees',       icon: '👥' },
+  { to: '/admin/maintenance',    label: 'Maintenance',     icon: '🔧' },
+  { to: '/admin/tasks',          label: 'Tasks',           icon: '✅' },
+  { to: '/admin/analytics',      label: 'Analytics',       icon: '📈' },
 ];
 
 export default function Sidebar() {

@@ -5,9 +5,11 @@ import Navbar from './Navbar';
 const TITLES = {
   '/admin':                'Dashboard',
   '/admin/map':            'Map View',
+  '/admin/bins':           'Live Bins',
   '/admin/command-center': 'Command Center',
   '/admin/alerts':         'Alerts',
   '/admin/employees':      'Employees',
+  '/admin/maintenance':    'Maintenance',
   '/admin/tasks':          'Tasks',
   '/admin/analytics':      'Analytics',
 };
