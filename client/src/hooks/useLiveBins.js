@@ -4,25 +4,42 @@ import { getAllBins } from '../services/binService';
 
 /**
  * useLiveBins
- * -----------
- * Returns live bin data. Strategy:
- *   1. Immediately fetches from MongoDB via REST API (fast first paint).
- *   2. Subscribes to Firestore for real-time structural updates.
- *   3. Subscribes to RTDB /sensors for ESP32 fill-level patches.
+ * ─────────────────────────────────────────────────────────────
+ * Returns live bin data merged from three sources:
  *
- * The three sources are merged so the UI always reflects the latest state.
+ *  1. MongoDB REST API       — fast first paint, source of truth
+ *  2. Firebase Firestore     — structural bin document updates
+ *  3. Firebase RTDB /bins/*  — ESP32 sensor patches (fill level)
+ *
+ * RTDB schema (your actual structure):
+ *   /bins/BIN001
+ *     binHeightCm:  241.8
+ *     distanceCm:   245.8
+ *     fillPercent:  0          ← field sent by ESP32
+ *     updatedAt:    1792319335  ← Unix seconds
+ *
+ * MongoDB schema uses binId like "KOP-001", "SHR-001".
+ * RTDB uses "BIN001". We match by stripping non-alpha chars:
+ *   "KOP-001" → "KOP001", "BIN001" → "BIN001"
+ * (adjust the normaliseBinId fn below if your naming differs)
  */
+
+/** Strip hyphens for loose matching between RTDB and MongoDB IDs */
+function normaliseBinId(id = '') {
+  return id.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+}
+
 export function useLiveBins() {
   const [bins,    setBins]    = useState([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
-  const binsRef = useRef([]);   // mutable ref to avoid stale closures
+  const binsRef = useRef([]);
 
   useEffect(() => {
     let unsubFirestore = null;
     let unsubRTDB      = null;
 
-    // ── Step 1: initial REST fetch ──────────────────────────────────────────
+    // ── STEP 1: Initial REST fetch (MongoDB) ──────────────────────────────
     getAllBins()
       .then((res) => {
         binsRef.current = res.data;
@@ -34,38 +51,63 @@ export function useLiveBins() {
         setLoading(false);
       });
 
-    // ── Step 2: Firestore subscription (full bin document updates) ──────────
+    // ── STEP 2: Firestore onSnapshot — structural updates ─────────────────
     unsubFirestore = subscribeToBins(
       (firestoreBins) => {
-        if (!firestoreBins.length) return; // Firestore empty → keep REST data
-
-        // Merge: Firestore doc wins over REST for matching binIds
+        if (!firestoreBins.length) return;
         setBins((prev) => {
           const fsMap = Object.fromEntries(firestoreBins.map((b) => [b.binId, b]));
-          const merged = prev.map((b) => fsMap[b.binId] ? { ...b, ...fsMap[b.binId] } : b);
-          // Add any Firestore-only bins not in MongoDB yet
+          const merged = prev.map((b) =>
+            fsMap[b.binId] ? { ...b, ...fsMap[b.binId] } : b
+          );
           const prevIds = new Set(prev.map((b) => b.binId));
-          firestoreBins.forEach((b) => { if (!prevIds.has(b.binId)) merged.push(b); });
+          firestoreBins.forEach((b) => {
+            if (!prevIds.has(b.binId)) merged.push(b);
+          });
           binsRef.current = merged;
-          return merged;
+          return [...merged];
         });
       },
-      (err) => console.error('[useLiveBins] Firestore error:', err)
+      (err) => console.warn('[useLiveBins] Firestore:', err.message)
     );
 
-    // ── Step 3: RTDB subscription (ESP32 fill-level micro-updates) ──────────
-    unsubRTDB = subscribeToAllSensors((sensors) => {
-      // sensors = { "KOP-001": { fill: 87, ts: 1234 }, ... }
+    // ── STEP 3: RTDB onValue — ESP32 fill-level patches ──────────────────
+    // Your RTDB: /bins/BIN001 { fillPercent, distanceCm, binHeightCm, updatedAt }
+    unsubRTDB = subscribeToAllSensors((rtdbBins) => {
+      // rtdbBins already normalised by firebase.js:
+      // { BIN001: { fillPercentage: 5, lastUpdated: "...", ... }, ... }
+
       setBins((prev) => {
         const updated = prev.map((bin) => {
-          const s = sensors[bin.binId];
-          if (!s) return bin;
-          const fill   = s.fillPercentage ?? s.fill ?? bin.fillPercentage;
-          const status = fill > 80 ? 'Critical' : fill > 50 ? 'Warning' : 'Normal';
-          return { ...bin, fillPercentage: fill, status, lastUpdated: new Date().toISOString() };
+          // Try exact match first, then normalised match
+          const rtdbKey =
+            Object.keys(rtdbBins).find(
+              (k) => k === bin.binId ||
+                     normaliseBinId(k) === normaliseBinId(bin.binId)
+            );
+          if (!rtdbKey) return bin;
+
+          const sensor = rtdbBins[rtdbKey];
+          const fill   = sensor.fillPercentage ?? bin.fillPercentage;
+          const status =
+            fill > 80 ? 'Critical' :
+            fill > 50 ? 'Warning'  : 'Normal';
+
+          return {
+            ...bin,
+            fillPercentage: fill,
+            status,
+            lastUpdated:    sensor.lastUpdated ?? new Date().toISOString(),
+            // Extra sensor fields shown in UI where useful
+            _sensor: {
+              distanceCm:  sensor.distanceCm,
+              binHeightCm: sensor.binHeightCm,
+              rawFillPct:  sensor.fillPercent,
+            },
+          };
         });
         binsRef.current = updated;
-        return updated;
+        return [...updated];
       });
     });
 

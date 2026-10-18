@@ -93,23 +93,60 @@ export async function syncBinToFirestore(bin) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Subscribe to a specific bin's live sensor data via RTDB.
- * ESP32 writes to /sensors/<binId> directly.
+ * Subscribe to all sensor readings at once.
+ *
+ * YOUR RTDB STRUCTURE (from Firebase console):
+ * /bins/BIN001
+ *   binHeightCm:  241.8
+ *   distanceCm:   245.8
+ *   fillPercent:  0        ← ESP32 field name
+ *   updatedAt:    1792319335
+ *
+ * We read from /bins (not /sensors) and map fillPercent → fillPercentage.
  */
-export function subscribeToBinSensor(binId, onChange) {
-  const sensorRef = ref(rtdb, `sensors/${binId}`);
-  return onValue(sensorRef, (snapshot) => {
-    if (snapshot.exists()) onChange(snapshot.val());
+export function subscribeToAllSensors(onChange) {
+  const binsRTDBRef = ref(rtdb, 'bins');   // ← matches your RTDB path
+  return onValue(binsRTDBRef, (snapshot) => {
+    if (snapshot.exists()) {
+      const raw = snapshot.val();
+      // Normalise field names so the rest of the app gets `fillPercentage`
+      const normalised = {};
+      Object.entries(raw).forEach(([binId, data]) => {
+        normalised[binId] = {
+          ...data,
+          // Accept both fillPercent (ESP32) and fillPercentage (our API)
+          fillPercentage: data.fillPercentage ?? data.fillPercent ?? 0,
+          // Compute fill % from distance if fillPercent is missing
+          // fillPercent = ((binHeightCm - distanceCm) / binHeightCm) * 100
+          ...(data.distanceCm != null && data.binHeightCm != null && data.fillPercent == null
+            ? { fillPercentage: Math.round(Math.max(0, ((data.binHeightCm - data.distanceCm) / data.binHeightCm) * 100)) }
+            : {}),
+          lastUpdated: data.updatedAt
+            ? new Date(data.updatedAt * 1000).toISOString()
+            : new Date().toISOString(),
+        };
+      });
+      onChange(normalised);
+    }
   });
 }
 
 /**
- * Subscribe to all sensor readings at once.
+ * Subscribe to a single bin's sensor data.
  */
-export function subscribeToAllSensors(onChange) {
-  const sensorsRef = ref(rtdb, 'sensors');
-  return onValue(sensorsRef, (snapshot) => {
-    if (snapshot.exists()) onChange(snapshot.val());
+export function subscribeToBinSensor(binId, onChange) {
+  const binRTDBRef = ref(rtdb, `bins/${binId}`);  // ← matches your RTDB path
+  return onValue(binRTDBRef, (snapshot) => {
+    if (snapshot.exists()) {
+      const data = snapshot.val();
+      onChange({
+        ...data,
+        fillPercentage: data.fillPercentage ?? data.fillPercent ?? 0,
+        lastUpdated: data.updatedAt
+          ? new Date(data.updatedAt * 1000).toISOString()
+          : new Date().toISOString(),
+      });
+    }
   });
 }
 

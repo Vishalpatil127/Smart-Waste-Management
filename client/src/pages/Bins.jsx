@@ -4,6 +4,7 @@ import FillBar from '../components/FillBar';
 import StatusBadge from '../components/StatusBadge';
 import Spinner from '../components/Spinner';
 import Modal from '../components/Modal';
+import SensorLiveCard from '../components/SensorLiveCard';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const deriveStatus = (fill) =>
@@ -415,6 +416,9 @@ export default function Bins() {
         onClose={() => setAdjustBin(null)}
         onSuccess={handleAdjustSuccess}
       />
+
+      {/* ── Live Firebase sensor feed (compact) ─────────── */}
+      <SensorLiveCard compact />
     </div>
   );
 }

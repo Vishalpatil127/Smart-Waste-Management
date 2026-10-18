@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useLiveBins }          from '../hooks/useLiveBins';
 import { getAllTasks }           from '../services/taskService';
-import FillBar       from '../components/FillBar';
-import StatusBadge   from '../components/StatusBadge';
-import Spinner       from '../components/Spinner';
-import BinDrawer     from '../components/BinDrawer';
-import AssignTaskModal from '../components/AssignTaskModal';
+import FillBar          from '../components/FillBar';
+import StatusBadge      from '../components/StatusBadge';
+import Spinner          from '../components/Spinner';
+import BinDrawer        from '../components/BinDrawer';
+import AssignTaskModal  from '../components/AssignTaskModal';
+import SensorLiveCard   from '../components/SensorLiveCard';
 
 // ── Live indicator dot ────────────────────────────────────────────────────────
 function LiveDot() {
@@ -200,6 +201,9 @@ export default function Dashboard() {
         onClose={() => setAssignBin(null)}
         onSuccess={(msg) => { setSuccessMsg(msg); }}
       />
+
+      {/* ── Live Firebase sensor feed ───────────────────── */}
+      <SensorLiveCard />
     </div>
   );
 }
