@@ -32,7 +32,8 @@ const getAllTasks = async (req, res) => {
 // ─────────────────────────────────────────────
 // POST /api/tasks
 // Create a task manually (admin)
-// Auto-registers bin in MongoDB if it only exists in RTDB (ESP32-only bins)
+// Auto-registers bin in MongoDB if it only exists in RTDB (ESP32-only bins).
+// Optionally assigns employee in the same request if assignedEmployeeId provided.
 // ─────────────────────────────────────────────
 const createTask = async (req, res) => {
   try {
@@ -42,23 +43,27 @@ const createTask = async (req, res) => {
       return res.status(400).json({ success: false, message: 'binId is required' });
     }
 
-    // Try to find the bin in MongoDB; if missing, auto-register it
-    // (handles ESP32/RTDB-only bins like BIN001 that were never POSTed to /api/bins/update)
+    // ── Upsert bin: find in MongoDB or auto-register from RTDB data ──────
     let bin = await Bin.findOne({ binId });
 
     if (!bin) {
-      // Need at least a fill percentage to register; use provided value or default 0
       const fill = fillPercentage != null ? Number(fillPercentage) : 0;
-
-      // lat/lng are optional — RTDB-only bins may not have a known location yet
+      // Use provided coords; fall back to Kopargaon centre so validation passes
       const location = (lat != null && lng != null)
         ? { lat: Number(lat), lng: Number(lng) }
-        : { lat: 0, lng: 0 };   // placeholder until ESP32 reports coordinates
+        : { lat: 19.8824, lng: 74.4761 };
 
-      bin = new Bin({ binId, location, fillPercentage: fill });
-      await bin.save();  // pre-save hook derives status
+      try {
+        bin = new Bin({ binId, location, fillPercentage: fill });
+        await bin.save();
+      } catch (saveErr) {
+        // If unique-key race condition (concurrent requests), just re-fetch
+        bin = await Bin.findOne({ binId });
+        if (!bin) throw saveErr;
+      }
     }
 
+    // ── Validate employee if provided ─────────────────────────────────────
     if (assignedEmployeeId) {
       const employee = await User.findById(assignedEmployeeId);
       if (!employee || employee.role !== 'employee') {
@@ -66,12 +71,13 @@ const createTask = async (req, res) => {
       }
     }
 
+    // ── Create task (and assign immediately if employee given) ────────────
     const task = await Task.create({
-      taskId: `TASK-${uuidv4().slice(0, 8).toUpperCase()}`,
+      taskId:             `TASK-${uuidv4().slice(0, 8).toUpperCase()}`,
       binId,
       assignedEmployeeId: assignedEmployeeId || null,
-      status: 'Pending',
-      timestamp: new Date(),
+      status:             assignedEmployeeId ? 'In-Progress' : 'Pending',
+      timestamp:          new Date(),
     });
 
     return res.status(201).json({ success: true, message: 'Task created', data: task });
