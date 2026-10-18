@@ -29,6 +29,14 @@ function normaliseBinId(id = '') {
   return id.replace(/[^A-Z0-9]/gi, '').toUpperCase();
 }
 
+/**
+ * Known locations for RTDB-only bins (ESP32 devices not yet in MongoDB).
+ * Key = binId exactly as it appears in Firebase RTDB.
+ */
+const RTDB_BIN_LOCATIONS = {
+  BIN001: { lat: 19.8824, lng: 74.4761 },
+};
+
 export function useLiveBins() {
   const [bins,    setBins]    = useState([]);
   const [loading, setLoading] = useState(true);
@@ -127,7 +135,7 @@ export function useLiveBins() {
             fillPercentage: fill,
             status,
             lastUpdated:    sensor.lastUpdated ?? new Date().toISOString(),
-            location:       null,   // no MongoDB record → no lat/lng yet
+            location:       RTDB_BIN_LOCATIONS[rtdbKey] ?? null,
             _rtdbOnly:      true,   // flag so UI can show "No location"
             _sensor: {
               distanceCm:  sensor.distanceCm,
