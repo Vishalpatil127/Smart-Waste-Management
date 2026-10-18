@@ -2,10 +2,12 @@ import { Outlet, useLocation } from 'react-router-dom';
 import EmployeeSidebar from './EmployeeSidebar';
 
 const TITLES = {
-  '/emp':         'My Dashboard',
-  '/emp/tasks':   'My Tasks',
-  '/emp/scanner': 'Bin Scanner',
-  '/emp/profile': 'My Profile',
+  '/emp':                      'My Dashboard',
+  '/emp/tasks':                'My Tasks',
+  '/emp/scanner':              'Bin Scanner',
+  '/emp/profile':              'My Profile',
+  '/emp/navigate':             'Navigate to Bin',
+  '/emp/collection-complete':  'Task Completed',
 };
 
 export default function EmployeeLayout() {

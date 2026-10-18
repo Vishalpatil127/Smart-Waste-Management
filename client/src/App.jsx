@@ -22,6 +22,8 @@ import EmployeeDashboard from './pages/emp/EmployeeDashboard';
 import MyTasks           from './pages/emp/MyTasks';
 import BinScanner        from './pages/emp/BinScanner';
 import EmployeeProfile   from './pages/emp/EmployeeProfile';
+import NavigateToBin     from './pages/emp/NavigateToBin';
+import CollectionComplete from './pages/emp/CollectionComplete';
 
 // ── Auth pages ───────────────────────────────────────────
 import Login from './pages/Login';
@@ -53,10 +55,12 @@ export default function App() {
       {/* ── Employee routes  /emp/* ──────────────────────── */}
       <Route element={<ProtectedRoute allowedRoles={['employee']} />}>
         <Route element={<EmployeeLayout />}>
-          <Route path="/emp"         element={<EmployeeDashboard />} />
-          <Route path="/emp/tasks"   element={<MyTasks />} />
-          <Route path="/emp/scanner" element={<BinScanner />} />
-          <Route path="/emp/profile" element={<EmployeeProfile />} />
+          <Route path="/emp"                     element={<EmployeeDashboard />} />
+          <Route path="/emp/tasks"              element={<MyTasks />} />
+          <Route path="/emp/scanner"            element={<BinScanner />} />
+          <Route path="/emp/profile"            element={<EmployeeProfile />} />
+          <Route path="/emp/navigate"           element={<NavigateToBin />} />
+          <Route path="/emp/collection-complete" element={<CollectionComplete />} />
         </Route>
       </Route>
 
