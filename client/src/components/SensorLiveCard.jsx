@@ -1,18 +1,90 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { getDatabase, ref, onValue } from 'firebase/database';
 import FillBar from './FillBar';
 import StatusBadge from './StatusBadge';
 import app from '../services/firebase';
 
+/** Loose match: strip non-alphanumeric and uppercase */
+function normaliseId(id = '') {
+  return id.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+}
+
+/**
+ * Reverse-geocode lat/lng → human-readable place name via Nominatim (free, no key).
+ * Returns suburb → city → town → village → county → country as available.
+ */
+async function reverseGeocode(lat, lng) {
+  try {
+    const res  = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      { headers: { 'Accept-Language': 'en' } }
+    );
+    const json = await res.json();
+    const a    = json.address ?? {};
+    return (
+      a.suburb    ||
+      a.village   ||
+      a.town      ||
+      a.city      ||
+      a.county    ||
+      a.state     ||
+      a.country   ||
+      'Unknown location'
+    );
+  } catch {
+    return null;
+  }
+}
+
 /**
  * SensorLiveCard — directly connects to Firebase RTDB.
  * Reads from /bins/* matching your ESP32 structure:
  *   BIN001 → { binHeightCm, distanceCm, fillPercent, updatedAt }
+ *
+ * Props:
+ *   compact  – boolean  condenses the card
+ *   bins     – merged bin array from useLiveBins (carries lat/lng from MongoDB)
  */
-export default function SensorLiveCard({ compact = false }) {
+export default function SensorLiveCard({ compact = false, bins = [] }) {
   const [sensors,   setSensors]   = useState({});
   const [status,    setStatus]    = useState('connecting'); // connecting | connected | error
   const [errMsg,    setErrMsg]    = useState('');
+  // Map of binId → { lat, lng, placeName }
+  const [locations, setLocations] = useState({});
+  const geocodedRef = useRef(new Set()); // prevent duplicate geocode calls
+
+  // ── Resolve lat/lng from merged bins prop ──────────────────────────────────
+  useEffect(() => {
+    if (!bins.length) return;
+
+    Object.keys(sensors).forEach((sensorId) => {
+      if (geocodedRef.current.has(sensorId)) return;
+
+      // Match RTDB id → MongoDB bin
+      const matched = bins.find(
+        (b) => b.binId === sensorId || normaliseId(b.binId) === normaliseId(sensorId)
+      );
+      if (!matched?.location?.lat) return;
+
+      geocodedRef.current.add(sensorId);
+      const { lat, lng } = matched.location;
+
+      // Immediately store coords; then enrich with place name
+      setLocations((prev) => ({
+        ...prev,
+        [sensorId]: { lat, lng, placeName: prev[sensorId]?.placeName ?? null },
+      }));
+
+      reverseGeocode(lat, lng).then((placeName) => {
+        if (placeName) {
+          setLocations((prev) => ({
+            ...prev,
+            [sensorId]: { lat, lng, placeName },
+          }));
+        }
+      });
+    });
+  }, [sensors, bins]); // eslint-disable-line
 
   useEffect(() => {
     const rtdb    = getDatabase(app);
@@ -150,19 +222,43 @@ export default function SensorLiveCard({ compact = false }) {
       {status === 'connected' && entries.length > 0 && (
         <div className={`divide-y divide-gray-50 ${compact ? 'max-h-52 overflow-y-auto' : ''}`}>
           {entries.map(([binId, sensor]) => {
-            const fill   = sensor.fillPercentage ?? 0;
+            const fill    = sensor.fillPercentage ?? 0;
             const bstatus = fill > 80 ? 'Critical' : fill > 50 ? 'Warning' : 'Normal';
+            const loc     = locations[binId];
 
             return (
               <div key={binId} className="px-5 py-4 space-y-2.5">
                 {/* Row header */}
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-mono font-extrabold text-gray-900 text-sm">{binId}</span>
                     <StatusBadge status={bstatus} />
+
+                    {/* Location chip */}
+                    {loc ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-full px-2 py-0.5">
+                        <span>📍</span>
+                        {loc.placeName
+                          ? <span className="font-medium text-gray-700">{loc.placeName}</span>
+                          : <span className="font-mono">{loc.lat.toFixed(5)}, {loc.lng.toFixed(5)}</span>
+                        }
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs text-gray-400 bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5">
+                        <span>📍</span>
+                        <span>No location</span>
+                      </span>
+                    )}
                   </div>
-                  <span className="text-xs text-gray-400 font-mono">{sensor.lastUpdated}</span>
+                  <span className="text-xs text-gray-400 font-mono shrink-0 ml-2">{sensor.lastUpdated}</span>
                 </div>
+
+                {/* Coordinates row (shown when place name is resolved) */}
+                {loc?.lat != null && (
+                  <p className="text-xs text-gray-400 font-mono">
+                    {loc.lat.toFixed(5)}, {loc.lng.toFixed(5)}
+                  </p>
+                )}
 
                 {/* Fill bar */}
                 <FillBar percentage={fill} />

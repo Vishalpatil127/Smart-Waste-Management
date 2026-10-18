@@ -78,6 +78,9 @@ export function useLiveBins() {
       // { BIN001: { fillPercentage: 5, lastUpdated: "...", ... }, ... }
 
       setBins((prev) => {
+        // Patch existing MongoDB bins with RTDB sensor data
+        const matchedRtdbKeys = new Set();
+
         const updated = prev.map((bin) => {
           // Try exact match first, then normalised match
           const rtdbKey =
@@ -86,6 +89,8 @@ export function useLiveBins() {
                      normaliseBinId(k) === normaliseBinId(bin.binId)
             );
           if (!rtdbKey) return bin;
+
+          matchedRtdbKeys.add(rtdbKey);
 
           const sensor = rtdbBins[rtdbKey];
           const fill   = sensor.fillPercentage ?? bin.fillPercentage;
@@ -106,6 +111,32 @@ export function useLiveBins() {
             },
           };
         });
+
+        // ── Add RTDB-only bins (e.g. BIN001) that have no MongoDB record ──
+        // These are real ESP32 bins not yet registered in MongoDB.
+        Object.entries(rtdbBins).forEach(([rtdbKey, sensor]) => {
+          if (matchedRtdbKeys.has(rtdbKey)) return; // already merged above
+
+          const fill   = sensor.fillPercentage ?? 0;
+          const status =
+            fill > 80 ? 'Critical' :
+            fill > 50 ? 'Warning'  : 'Normal';
+
+          updated.push({
+            binId:          rtdbKey,
+            fillPercentage: fill,
+            status,
+            lastUpdated:    sensor.lastUpdated ?? new Date().toISOString(),
+            location:       null,   // no MongoDB record → no lat/lng yet
+            _rtdbOnly:      true,   // flag so UI can show "No location"
+            _sensor: {
+              distanceCm:  sensor.distanceCm,
+              binHeightCm: sensor.binHeightCm,
+              rawFillPct:  sensor.fillPercent,
+            },
+          });
+        });
+
         binsRef.current = updated;
         return [...updated];
       });

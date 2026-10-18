@@ -106,6 +106,9 @@ export default function Dashboard() {
         <LiveDot />
       </div>
 
+      {/* ── Live Firebase sensor feed ───────────────────── */}
+      <SensorLiveCard bins={bins} />
+
       {successMsg && (
         <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-2">
           ✅ {successMsg}
@@ -144,7 +147,10 @@ export default function Dashboard() {
                 <tr key={bin._id ?? bin.binId} className="hover:bg-gray-50 transition-colors">
                   <td className="py-3 pr-4 font-mono font-semibold text-gray-800">{bin.binId}</td>
                   <td className="py-3 pr-4 text-gray-400 text-xs">
-                    {bin.location?.lat?.toFixed(5)}, {bin.location?.lng?.toFixed(5)}
+                    {bin.location?.lat != null
+                      ? `${bin.location.lat.toFixed(5)}, ${bin.location.lng.toFixed(5)}`
+                      : <span className="text-gray-300 italic">No location</span>
+                    }
                   </td>
                   <td className="py-3 pr-4 w-44">
                     <FillBar percentage={bin.fillPercentage} />
@@ -202,8 +208,6 @@ export default function Dashboard() {
         onSuccess={(msg) => { setSuccessMsg(msg); }}
       />
 
-      {/* ── Live Firebase sensor feed ───────────────────── */}
-      <SensorLiveCard />
     </div>
   );
 }
